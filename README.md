@@ -44,7 +44,7 @@ Decision: If the distance is below the threshold (0.6), access is GRANTED. Other
 
 Clone the repository:
 
-git clone [https://github.com/YourUsername/face-recognition-access.git](https://github.com/Ram0018-code/face-recognition-app.git)
+git clone [https://github.com/Ram0018-code/Face-Recognition-app.git](https://github.com/Ram0018-code/Face-Recognition-app.git)
 
 
 Navigate to the project folder.
@@ -69,4 +69,4 @@ Database integration (Firebase/Supabase) for persistent storage.
 
 This project is open source and available under the MIT License.
 
-Created by [Your Name] - Connect with me on [LinkedIn]([PASTE YOUR LINKEDIN URL])
+Created by [Ram0018-code] - Connect with me on [LinkedIn]([PASTE YOUR LINKEDIN URL])
