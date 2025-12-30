@@ -44,7 +44,7 @@ Decision: If the distance is below the threshold (0.6), access is GRANTED. Other
 
 Clone the repository:
 
-git clone [https://github.com/YourUsername/face-recognition-access.git](https://github.com/YourUsername/face-recognition-access.git)
+git clone [https://github.com/YourUsername/face-recognition-access.git](https://github.com/Ram0018-code/face-recognition-app.git)
 
 
 Navigate to the project folder.
