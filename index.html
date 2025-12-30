@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biometric Access Control</title>
+    <!-- Load face-api.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        :root {
+            --primary: #00ff41;
+            --danger: #ff0055;
+            --bg: #0a0a0a;
+            --panel: #111;
+            --text: #eee;
+            --scan-line: rgba(0, 255, 65, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Video Container */
+        .cam-wrapper {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 0 auto;
+            background: #000;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+        }
+
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.8;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* HUD Overlays */
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            z-index: 10;
+        }
+
+        .scan-line {
+            width: 100%;
+            height: 2px;
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+            position: absolute;
+            top: 0;
+            animation: scan 2s linear infinite;
+            display: none;
+        }
+
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* UI Controls */
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 12px 24px;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+
+        button:hover {
+            background: var(--primary);
+            color: var(--bg);
+            box-shadow: 0 0 15px var(--primary);
+        }
+
+        button:disabled {
+            border-color: #555;
+            color: #555;
+            cursor: not-allowed;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        button.danger {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        button.danger:hover {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 0 15px var(--danger);
+        }
+
+        /* Status Panels */
+        .status-panel {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .status-text {
+            font-weight: bold;
+        }
+
+        .status-loading { color: #ffff00; }
+        .status-ready { color: #00ffff; }
+        .status-granted { color: var(--primary); text-shadow: 0 0 10px var(--primary); }
+        .status-denied { color: var(--danger); text-shadow: 0 0 10px var(--danger); }
+
+        /* Corner accents for HUD */
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--primary);
+            border-style: solid;
+            transition: all 0.3s;
+        }
+        .tl { top: 10px; left: 10px; border-width: 2px 0 0 2px; }
+        .tr { top: 10px; right: 10px; border-width: 2px 2px 0 0; }
+        .bl { bottom: 10px; left: 10px; border-width: 0 0 2px 2px; }
+        .br { bottom: 10px; right: 10px; border-width: 0 2px 2px 0; }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            .cam-wrapper {
+                width: 100%;
+                height: 300px;
+            }
+        }
+
+        .access-granted-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 255, 65, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: var(--primary);
+            font-weight: 900;
+            border: 4px solid var(--primary);
+            display: none;
+            z-index: 20;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { background: rgba(0, 255, 65, 0.1); }
+            50% { background: rgba(0, 255, 65, 0.3); }
+            100% { background: rgba(0, 255, 65, 0.1); }
+        }
+
+        /* Loader */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #FFF;
+            border-bottom-color: var(--primary);
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="status-panel">
+            SYSTEM STATUS: <span id="status" class="status-text status-loading">INITIALIZING NEURAL NET...</span>
+        </div>
+
+        <div class="cam-wrapper">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="overlay"></canvas>
+            
+            <div class="hud-overlay">
+                <div class="corner tl"></div>
+                <div class="corner tr"></div>
+                <div class="corner bl"></div>
+                <div class="corner br"></div>
+                <div id="scanLine" class="scan-line"></div>
+                <div id="accessScreen" class="access-granted-screen">ACCESS GRANTED</div>
+            </div>
+            
+            <!-- Loading overlay inside video -->
+            <div id="videoLoader" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center;">
+                <span class="loader"></span>
+                <p>LOADING MODELS</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="btnRegister" disabled onclick="registerFace()">Register ID</button>
+            <button id="btnToggle" disabled onclick="toggleScanning()">Start Scanning</button>
+            <button class="danger" onclick="resetSystem()">Reset System</button>
+        </div>
+        
+        <p style="margin-top: 15px; font-size: 0.8rem; color: #666;">
+            Data is stored locally in your browser memory. <br>Ensure good lighting for best results.
+        </p>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        // Using GitHub Pages mirror for reliable model hosting
+        const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+        
+        let labeledFaceDescriptors = null;
+        let faceMatcher = null;
+        let isScanning = false;
+        let isModelLoaded = false;
+        let detectionInterval = null;
+        
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const statusSpan = document.getElementById('status');
+        const btnRegister = document.getElementById('btnRegister');
+        const btnToggle = document.getElementById('btnToggle');
+        const scanLine = document.getElementById('scanLine');
+        const videoLoader = document.getElementById('videoLoader');
+        const accessScreen = document.getElementById('accessScreen');
+
+        // --- Initialization ---
+
+        // 1. Load Models
+        Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL), // Switched to TinyFaceDetector for speed
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]).then(startVideo).catch(err => {
+            console.error("Model Loading Error:", err);
+            statusSpan.innerText = "MODEL LOAD ERROR";
+            statusSpan.style.color = "red";
+        });
+
+        // 2. Start Webcam
+        function startVideo() {
+            navigator.mediaDevices.getUserMedia({ video: {} })
+                .then(stream => {
+                    video.srcObject = stream;
+                })
+                .catch(err => {
+                    console.error("Camera Error:", err);
+                    statusSpan.innerText = "CAMERA DENIED";
+                    statusSpan.style.color = "red";
+                });
+        }
+
+        // 3. Setup Canvas when Video Plays
+        video.addEventListener('play', () => {
+            // Models are now ready
+            isModelLoaded = true;
+            videoLoader.style.display = 'none';
+            statusSpan.innerText = "SYSTEM READY - PLEASE REGISTER";
+            statusSpan.className = "status-text status-ready";
+            btnRegister.disabled = false;
+
+            // Clear any existing intervals if event fires multiple times
+            if (detectionInterval) clearInterval(detectionInterval);
+
+            // Start the recognition loop
+            detectionInterval = setInterval(async () => {
+                if (!isModelLoaded) return;
+                
+                // CRITICAL FIX: Ensure video has valid dimensions before processing
+                if (video.clientWidth === 0 || video.clientHeight === 0 || video.paused || video.ended) {
+                    return;
+                }
+
+                const displaySize = { width: video.clientWidth, height: video.clientHeight };
+                
+                try {
+                    // Detect Face - Using TinyFaceDetector for faster performance
+                    // inputSize: 512 is a good balance of speed vs accuracy. 
+                    // Use smaller (e.g., 320) for even more speed but less accuracy.
+                    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 });
+                    
+                    const detections = await faceapi.detectAllFaces(video, options)
+                        .withFaceLandmarks()
+                        .withFaceDescriptors();
+                    
+                    // Resize detections to fit canvas
+                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                    
+                    // Clear previous drawings
+                    const ctx = overlay.getContext('2d');
+                    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+                    // --- LOGIC: If Scanning Enabled ---
+                    if (isScanning && labeledFaceDescriptors) {
+                        
+                        if (!faceMatcher) {
+                            // Create matcher from single registered face
+                            faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.6); // 0.6 is distance threshold
+                        }
+
+                        const results = resizedDetections.map(d => faceMatcher.findBestMatch(d.descriptor));
+
+                        results.forEach((result, i) => {
+                            const box = resizedDetections[i].detection.box;
+                            const { label, distance } = result;
+
+                            // Visuals
+                            let color = '#ff0055'; // Red (Unknown)
+                            let text = "UNKNOWN";
+
+                            if (label === 'AuthorizedUser') {
+                                color = '#00ff41'; // Green
+                                text = `AUTHORIZED (${Math.round((1-distance)*100)}%)`;
+                                grantAccess();
+                            } else {
+                                denyAccess();
+                            }
+
+                            // Draw Box
+                            const drawBox = new faceapi.draw.DrawBox(box, { label: text, boxColor: color });
+                            drawBox.draw(overlay);
+                        });
+
+                        if (results.length === 0) {
+                            // No face found
+                            denyAccess();
+                        }
+
+                    } else {
+                        // Just draw generic detection box if not identifying
+                        faceapi.draw.drawDetections(overlay, resizedDetections);
+                    }
+                } catch (error) {
+                    console.warn("Detection loop error (safe to ignore if initializing):", error);
+                }
+
+            }, 100);
+        });
+
+        // --- Core Functions ---
+
+        async function registerFace() {
+            if (!isModelLoaded) return;
+            
+            // Check dimensions before single detection
+            if (video.clientWidth === 0 || video.clientHeight === 0) {
+                alert("Video feed not ready yet. Please wait.");
+                return;
+            }
+
+            statusSpan.innerText = "CAPTURING BIOMETRICS...";
+            statusSpan.className = "status-text status-loading";
+            btnRegister.disabled = true;
+
+            try {
+                // Get a single detection with descriptor - Using TinyFaceDetector
+                const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 });
+                const detection = await faceapi.detectSingleFace(video, options)
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+
+                if (detection) {
+                    // Save the descriptor
+                    // In a real app, this goes to a database. Here we keep it in memory.
+                    const descriptor = detection.descriptor;
+                    labeledFaceDescriptors = new faceapi.LabeledFaceDescriptors('AuthorizedUser', [descriptor]);
+                    
+                    statusSpan.innerText = "ID REGISTERED. READY TO SCAN.";
+                    statusSpan.className = "status-text status-ready";
+                    btnToggle.disabled = false;
+                    
+                    alert("Face Registered Successfully! You can now start scanning.");
+                } else {
+                    statusSpan.innerText = "NO FACE DETECTED. TRY AGAIN.";
+                    statusSpan.className = "status-text status-denied";
+                    btnRegister.disabled = false;
+                }
+            } catch (err) {
+                console.error("Registration error:", err);
+                statusSpan.innerText = "ERROR REGISTERING";
+                btnRegister.disabled = false;
+            }
+        }
+
+        function toggleScanning() {
+            if (!isScanning) {
+                isScanning = true;
+                btnToggle.innerText = "Stop Scanning";
+                scanLine.style.display = 'block';
+                statusSpan.innerText = "SCANNING...";
+            } else {
+                isScanning = false;
+                btnToggle.innerText = "Start Scanning";
+                scanLine.style.display = 'none';
+                accessScreen.style.display = 'none';
+                statusSpan.innerText = "SYSTEM IDLE";
+                statusSpan.className = "status-text status-ready";
+                
+                // Reset styling
+                document.documentElement.style.setProperty('--primary', '#00ff41');
+            }
+        }
+
+        function grantAccess() {
+            statusSpan.innerText = "ACCESS GRANTED";
+            statusSpan.className = "status-text status-granted";
+            accessScreen.style.display = 'flex';
+            
+            // Visual feedback
+            document.querySelectorAll('.corner').forEach(c => c.style.borderColor = '#00ff41');
+        }
+
+        function denyAccess() {
+            statusSpan.innerText = "ACCESS DENIED";
+            statusSpan.className = "status-text status-denied";
+            accessScreen.style.display = 'none';
+            
+            // Visual feedback
+            document.querySelectorAll('.corner').forEach(c => c.style.borderColor = '#ff0055');
+        }
+
+        function resetSystem() {
+            labeledFaceDescriptors = null;
+            faceMatcher = null;
+            isScanning = false;
+            
+            btnRegister.disabled = false;
+            btnToggle.disabled = true;
+            btnToggle.innerText = "Start Scanning";
+            
+            scanLine.style.display = 'none';
+            accessScreen.style.display = 'none';
+            
+            statusSpan.innerText = "SYSTEM RESET. PLEASE REGISTER.";
+            statusSpan.className = "status-text status-ready";
+            
+            document.querySelectorAll('.corner').forEach(c => c.style.borderColor = '#00ff41');
+        }
+
+    </script>
+</body>
+</html>
